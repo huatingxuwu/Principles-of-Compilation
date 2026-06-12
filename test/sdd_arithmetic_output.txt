@@ -1,0 +1,170 @@
+
+============================================================
+  算术表达式:  a + b
+============================================================
+
+  Tokens: ID + ID
+
+  ── SDD 翻译过程 ──
+  F → id (a),  F.place = 'a'
+  T.place ← F.place = a
+  E.place ← T.place = a
+    看到 '+'
+  F → id (b),  F.place = 'b'
+  T.place ← F.place = b
+    emit: t1 = a + b  (E.place → t1)
+
+  生成的三地址码:
+  ───────────────────────────────────
+  t1 = a + b
+  ───────────────────────────────────
+  根节点: t1
+  临时变量: t1
+
+
+============================================================
+  算术表达式:  a + b * c
+============================================================
+
+  Tokens: ID + ID * ID
+
+  ── SDD 翻译过程 ──
+  F → id (a),  F.place = 'a'
+  T.place ← F.place = a
+  E.place ← T.place = a
+    看到 '+'
+  F → id (b),  F.place = 'b'
+  T.place ← F.place = b
+    看到 '*'
+  F → id (c),  F.place = 'c'
+    emit: t1 = b * c  (T.place → t1)
+    emit: t2 = a + t1  (E.place → t2)
+
+  生成的三地址码:
+  ───────────────────────────────────
+  t1 = b * c
+  t2 = a + t1
+  ───────────────────────────────────
+  根节点: t2
+  临时变量: t1, t2
+
+
+============================================================
+  算术表达式:  x * y + z / (a - b)
+============================================================
+
+  Tokens: ID * ID + ID / ( ID - ID )
+
+  ── SDD 翻译过程 ──
+  F → id (x),  F.place = 'x'
+  T.place ← F.place = x
+    看到 '*'
+  F → id (y),  F.place = 'y'
+    emit: t1 = x * y  (T.place → t1)
+  E.place ← T.place = t1
+    看到 '+'
+  F → id (z),  F.place = 'z'
+  T.place ← F.place = z
+    看到 '/'
+  F → ( E )
+  F → id (a),  F.place = 'a'
+  T.place ← F.place = a
+  E.place ← T.place = a
+    看到 '-'
+  F → id (b),  F.place = 'b'
+  T.place ← F.place = b
+    emit: t2 = a - b  (E.place → t2)
+  F.place = E.place = t2
+    emit: t3 = z / t2  (T.place → t3)
+    emit: t4 = t1 + t3  (E.place → t4)
+
+  生成的三地址码:
+  ───────────────────────────────────
+  t1 = x * y
+  t2 = a - b
+  t3 = z / t2
+  t4 = t1 + t3
+  ───────────────────────────────────
+  根节点: t4
+  临时变量: t1, t2, t3, t4
+
+
+============================================================
+  算术表达式:  a * b + c * d - e / f
+============================================================
+
+  Tokens: ID * ID + ID * ID - ID / ID
+
+  ── SDD 翻译过程 ──
+  F → id (a),  F.place = 'a'
+  T.place ← F.place = a
+    看到 '*'
+  F → id (b),  F.place = 'b'
+    emit: t1 = a * b  (T.place → t1)
+  E.place ← T.place = t1
+    看到 '+'
+  F → id (c),  F.place = 'c'
+  T.place ← F.place = c
+    看到 '*'
+  F → id (d),  F.place = 'd'
+    emit: t2 = c * d  (T.place → t2)
+    emit: t3 = t1 + t2  (E.place → t3)
+    看到 '-'
+  F → id (e),  F.place = 'e'
+  T.place ← F.place = e
+    看到 '/'
+  F → id (f),  F.place = 'f'
+    emit: t4 = e / f  (T.place → t4)
+    emit: t5 = t3 - t4  (E.place → t5)
+
+  生成的三地址码:
+  ───────────────────────────────────
+  t1 = a * b
+  t2 = c * d
+  t3 = t1 + t2
+  t4 = e / f
+  t5 = t3 - t4
+  ───────────────────────────────────
+  根节点: t5
+  临时变量: t1, t2, t3, t4, t5
+
+
+============================================================
+  算术表达式:  (x + y) * (a - b)
+============================================================
+
+  Tokens: ( ID + ID ) * ( ID - ID )
+
+  ── SDD 翻译过程 ──
+  F → ( E )
+  F → id (x),  F.place = 'x'
+  T.place ← F.place = x
+  E.place ← T.place = x
+    看到 '+'
+  F → id (y),  F.place = 'y'
+  T.place ← F.place = y
+    emit: t1 = x + y  (E.place → t1)
+  F.place = E.place = t1
+  T.place ← F.place = t1
+    看到 '*'
+  F → ( E )
+  F → id (a),  F.place = 'a'
+  T.place ← F.place = a
+  E.place ← T.place = a
+    看到 '-'
+  F → id (b),  F.place = 'b'
+  T.place ← F.place = b
+    emit: t2 = a - b  (E.place → t2)
+  F.place = E.place = t2
+    emit: t3 = t1 * t2  (T.place → t3)
+  E.place ← T.place = t3
+
+  生成的三地址码:
+  ───────────────────────────────────
+  t1 = x + y
+  t2 = a - b
+  t3 = t1 * t2
+  ───────────────────────────────────
+  根节点: t3
+  临时变量: t1, t2, t3
+

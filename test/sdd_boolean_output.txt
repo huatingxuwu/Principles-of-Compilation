@@ -1,0 +1,407 @@
+
+============================================================
+  布尔表达式:  a < b
+============================================================
+
+  Tokens: ID(a) RELOP(<) ID(b)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → id relop id  (a < b)
+      [0] emit: < a b  (目标待回填)
+      [1] emit: jump  (目标待回填)
+        │ 生成 [0] if a < b goto _, [1] goto _
+        │ truelist=[0], falselist=[1]
+      └─ F (relop) → truelist=[0], falselist=[1]
+    └─ T → truelist=[0], falselist=[1]
+  └─ B → truelist=[0], falselist=[1]
+  
+  最终回填:
+      B.truelist  = [0]  →  L2  (true 出口)
+      B.falselist = [1]  →  L3  (false 出口)
+      backpatch([0], L2)  ← 指令 [0] 的目标填为 L2
+      backpatch([1], L3)  ← 指令 [1] 的目标填为 L3
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if a < b goto L2
+  goto L3
+  L2: ...  // true  出口
+  L3: ...  // false 出口
+  ─────────────────────────────────────────────
+
+
+============================================================
+  布尔表达式:  a < b && c > d
+============================================================
+
+  Tokens: ID(a) RELOP(<) ID(b) AND(&&) ID(c) RELOP(>) ID(d)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → id relop id  (a < b)
+      [0] emit: < a b  (目标待回填)
+      [1] emit: jump  (目标待回填)
+        │ 生成 [0] if a < b goto _, [1] goto _
+        │ truelist=[0], falselist=[1]
+      └─ F (relop) → truelist=[0], falselist=[1]
+      │ 看到 '&&'
+      │ M → ε,  M.quad = 2  (L2)
+      │ T₁.truelist = [0]  →  回填到 M.quad = L2
+      backpatch([0], L2)  ← 指令 [0] 的目标填为 L2
+      ┌─ F → id relop id  (c > d)
+      [2] emit: > c d  (目标待回填)
+      [3] emit: jump  (目标待回填)
+        │ 生成 [2] if c > d goto _, [3] goto _
+        │ truelist=[2], falselist=[3]
+      └─ F (relop) → truelist=[2], falselist=[3]
+      │ 合并: falselist = merge([1], [3]) = [1, 3]
+      │       truelist = [2]  (F₂ 的真出口)
+    └─ T → truelist=[2], falselist=[1, 3]
+  └─ B → truelist=[2], falselist=[1, 3]
+  
+  最终回填:
+      B.truelist  = [2]  →  L4  (true 出口)
+      B.falselist = [1, 3]  →  L5  (false 出口)
+      backpatch([2], L4)  ← 指令 [2] 的目标填为 L4
+      backpatch([1, 3], L5)  ← 指令 [1, 3] 的目标填为 L5
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if a < b goto L2
+  goto L5
+  L2: if c > d goto L4
+  goto L5
+  L4: ...  // true  出口
+  L5: ...  // false 出口
+  ─────────────────────────────────────────────
+
+
+============================================================
+  布尔表达式:  x < 0 || x > 100
+============================================================
+
+  Tokens: ID(x) RELOP(<) ID(0) OR(||) ID(x) RELOP(>) ID(100)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → id relop id  (x < 0)
+      [0] emit: < x 0  (目标待回填)
+      [1] emit: jump  (目标待回填)
+        │ 生成 [0] if x < 0 goto _, [1] goto _
+        │ truelist=[0], falselist=[1]
+      └─ F (relop) → truelist=[0], falselist=[1]
+    └─ T → truelist=[0], falselist=[1]
+    │ 看到 '||'
+    │ M → ε,  M.quad = 2  (L2)
+    │ B₁.falselist = [1]  →  回填到 M.quad = L2
+      backpatch([1], L2)  ← 指令 [1] 的目标填为 L2
+    ┌─ T → F
+      ┌─ F → id relop id  (x > 100)
+      [2] emit: > x 100  (目标待回填)
+      [3] emit: jump  (目标待回填)
+        │ 生成 [2] if x > 100 goto _, [3] goto _
+        │ truelist=[2], falselist=[3]
+      └─ F (relop) → truelist=[2], falselist=[3]
+    └─ T → truelist=[2], falselist=[3]
+    │ 合并: truelist = merge([0], [2]) = [0, 2]
+    │       falselist = [3]  (B₂ 的假出口)
+  └─ B → truelist=[0, 2], falselist=[3]
+  
+  最终回填:
+      B.truelist  = [0, 2]  →  L4  (true 出口)
+      B.falselist = [3]  →  L5  (false 出口)
+      backpatch([0, 2], L4)  ← 指令 [0, 2] 的目标填为 L4
+      backpatch([3], L5)  ← 指令 [3] 的目标填为 L5
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if x < 0 goto L4
+  goto L2
+  L2: if x > 100 goto L4
+  goto L5
+  L4: ...  // true  出口
+  L5: ...  // false 出口
+  ─────────────────────────────────────────────
+
+
+============================================================
+  布尔表达式:  a && b || c && d
+============================================================
+
+  Tokens: ID(a) AND(&&) ID(b) OR(||) ID(c) AND(&&) ID(d)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → id  (a)
+      [0] emit: jtrue a  (目标待回填)
+      [1] emit: jump  (目标待回填)
+        │ 生成 [0] if a goto _, [1] goto _
+        │ truelist=[0], falselist=[1]
+      └─ F (id) → truelist=[0], falselist=[1]
+      │ 看到 '&&'
+      │ M → ε,  M.quad = 2  (L2)
+      │ T₁.truelist = [0]  →  回填到 M.quad = L2
+      backpatch([0], L2)  ← 指令 [0] 的目标填为 L2
+      ┌─ F → id  (b)
+      [2] emit: jtrue b  (目标待回填)
+      [3] emit: jump  (目标待回填)
+        │ 生成 [2] if b goto _, [3] goto _
+        │ truelist=[2], falselist=[3]
+      └─ F (id) → truelist=[2], falselist=[3]
+      │ 合并: falselist = merge([1], [3]) = [1, 3]
+      │       truelist = [2]  (F₂ 的真出口)
+    └─ T → truelist=[2], falselist=[1, 3]
+    │ 看到 '||'
+    │ M → ε,  M.quad = 4  (L4)
+    │ B₁.falselist = [1, 3]  →  回填到 M.quad = L4
+      backpatch([1, 3], L4)  ← 指令 [1, 3] 的目标填为 L4
+    ┌─ T → F
+      ┌─ F → id  (c)
+      [4] emit: jtrue c  (目标待回填)
+      [5] emit: jump  (目标待回填)
+        │ 生成 [4] if c goto _, [5] goto _
+        │ truelist=[4], falselist=[5]
+      └─ F (id) → truelist=[4], falselist=[5]
+      │ 看到 '&&'
+      │ M → ε,  M.quad = 6  (L6)
+      │ T₁.truelist = [4]  →  回填到 M.quad = L6
+      backpatch([4], L6)  ← 指令 [4] 的目标填为 L6
+      ┌─ F → id  (d)
+      [6] emit: jtrue d  (目标待回填)
+      [7] emit: jump  (目标待回填)
+        │ 生成 [6] if d goto _, [7] goto _
+        │ truelist=[6], falselist=[7]
+      └─ F (id) → truelist=[6], falselist=[7]
+      │ 合并: falselist = merge([5], [7]) = [5, 7]
+      │       truelist = [6]  (F₂ 的真出口)
+    └─ T → truelist=[6], falselist=[5, 7]
+    │ 合并: truelist = merge([2], [6]) = [2, 6]
+    │       falselist = [5, 7]  (B₂ 的假出口)
+  └─ B → truelist=[2, 6], falselist=[5, 7]
+  
+  最终回填:
+      B.truelist  = [2, 6]  →  L8  (true 出口)
+      B.falselist = [5, 7]  →  L9  (false 出口)
+      backpatch([2, 6], L8)  ← 指令 [2, 6] 的目标填为 L8
+      backpatch([5, 7], L9)  ← 指令 [5, 7] 的目标填为 L9
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if a goto L2
+  goto L4
+  L2: if b goto L8
+  goto L4
+  L4: if c goto L6
+  goto L9
+  L6: if d goto L8
+  goto L9
+  L8: ...  // true  出口
+  L9: ...  // false 出口
+  ─────────────────────────────────────────────
+
+
+============================================================
+  布尔表达式:  (a < b || c > d) && e == f
+============================================================
+
+  Tokens: ((() ID(a) RELOP(<) ID(b) OR(||) ID(c) RELOP(>) ID(d) )()) AND(&&) ID(e) RELOP(==) ID(f)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → ( B )
+        ┌─ B → T
+          ┌─ T → F
+            ┌─ F → id relop id  (a < b)
+      [0] emit: < a b  (目标待回填)
+      [1] emit: jump  (目标待回填)
+              │ 生成 [0] if a < b goto _, [1] goto _
+              │ truelist=[0], falselist=[1]
+            └─ F (relop) → truelist=[0], falselist=[1]
+          └─ T → truelist=[0], falselist=[1]
+          │ 看到 '||'
+          │ M → ε,  M.quad = 2  (L2)
+          │ B₁.falselist = [1]  →  回填到 M.quad = L2
+      backpatch([1], L2)  ← 指令 [1] 的目标填为 L2
+          ┌─ T → F
+            ┌─ F → id relop id  (c > d)
+      [2] emit: > c d  (目标待回填)
+      [3] emit: jump  (目标待回填)
+              │ 生成 [2] if c > d goto _, [3] goto _
+              │ truelist=[2], falselist=[3]
+            └─ F (relop) → truelist=[2], falselist=[3]
+          └─ T → truelist=[2], falselist=[3]
+          │ 合并: truelist = merge([0], [2]) = [0, 2]
+          │       falselist = [3]  (B₂ 的假出口)
+        └─ B → truelist=[0, 2], falselist=[3]
+      └─ F (paren) → truelist=[0, 2], falselist=[3]
+      │ 看到 '&&'
+      │ M → ε,  M.quad = 4  (L4)
+      │ T₁.truelist = [0, 2]  →  回填到 M.quad = L4
+      backpatch([0, 2], L4)  ← 指令 [0, 2] 的目标填为 L4
+      ┌─ F → id relop id  (e == f)
+      [4] emit: == e f  (目标待回填)
+      [5] emit: jump  (目标待回填)
+        │ 生成 [4] if e == f goto _, [5] goto _
+        │ truelist=[4], falselist=[5]
+      └─ F (relop) → truelist=[4], falselist=[5]
+      │ 合并: falselist = merge([3], [5]) = [3, 5]
+      │       truelist = [4]  (F₂ 的真出口)
+    └─ T → truelist=[4], falselist=[3, 5]
+  └─ B → truelist=[4], falselist=[3, 5]
+  
+  最终回填:
+      B.truelist  = [4]  →  L6  (true 出口)
+      B.falselist = [3, 5]  →  L7  (false 出口)
+      backpatch([4], L6)  ← 指令 [4] 的目标填为 L6
+      backpatch([3, 5], L7)  ← 指令 [3, 5] 的目标填为 L7
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if a < b goto L4
+  goto L2
+  L2: if c > d goto L4
+  goto L7
+  L4: if e == f goto L6
+  goto L7
+  L6: ...  // true  出口
+  L7: ...  // false 出口
+  ─────────────────────────────────────────────
+
+
+============================================================
+  布尔表达式:  ! (x < 0) && y > 0
+============================================================
+
+  Tokens: NOT(!) ((() ID(x) RELOP(<) ID(0) )()) AND(&&) ID(y) RELOP(>) ID(0)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → ! F
+        ┌─ F → ( B )
+          ┌─ B → T
+            ┌─ T → F
+              ┌─ F → id relop id  (x < 0)
+      [0] emit: < x 0  (目标待回填)
+      [1] emit: jump  (目标待回填)
+                │ 生成 [0] if x < 0 goto _, [1] goto _
+                │ truelist=[0], falselist=[1]
+              └─ F (relop) → truelist=[0], falselist=[1]
+            └─ T → truelist=[0], falselist=[1]
+          └─ B → truelist=[0], falselist=[1]
+        └─ F (paren) → truelist=[0], falselist=[1]
+        │ ! 取反: truelist ↔ falselist
+        │   原: truelist=[0], falselist=[1]
+        │   新: truelist=[1], falselist=[0]
+      └─ F (not) → truelist=[1], falselist=[0]
+      │ 看到 '&&'
+      │ M → ε,  M.quad = 2  (L2)
+      │ T₁.truelist = [1]  →  回填到 M.quad = L2
+      backpatch([1], L2)  ← 指令 [1] 的目标填为 L2
+      ┌─ F → id relop id  (y > 0)
+      [2] emit: > y 0  (目标待回填)
+      [3] emit: jump  (目标待回填)
+        │ 生成 [2] if y > 0 goto _, [3] goto _
+        │ truelist=[2], falselist=[3]
+      └─ F (relop) → truelist=[2], falselist=[3]
+      │ 合并: falselist = merge([0], [3]) = [0, 3]
+      │       truelist = [2]  (F₂ 的真出口)
+    └─ T → truelist=[2], falselist=[0, 3]
+  └─ B → truelist=[2], falselist=[0, 3]
+  
+  最终回填:
+      B.truelist  = [2]  →  L4  (true 出口)
+      B.falselist = [0, 3]  →  L5  (false 出口)
+      backpatch([2], L4)  ← 指令 [2] 的目标填为 L4
+      backpatch([0, 3], L5)  ← 指令 [0, 3] 的目标填为 L5
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if x < 0 goto L5
+  goto L2
+  L2: if y > 0 goto L4
+  goto L5
+  L4: ...  // true  出口
+  L5: ...  // false 出口
+  ─────────────────────────────────────────────
+
+
+============================================================
+  布尔表达式:  a < b && ! (c == d) || e > f
+============================================================
+
+  Tokens: ID(a) RELOP(<) ID(b) AND(&&) NOT(!) ((() ID(c) RELOP(==) ID(d) )()) OR(||) ID(e) RELOP(>) ID(f)
+
+  ── SDD 翻译过程 (属性求值 & 回填) ──
+  ┌─ B → T
+    ┌─ T → F
+      ┌─ F → id relop id  (a < b)
+      [0] emit: < a b  (目标待回填)
+      [1] emit: jump  (目标待回填)
+        │ 生成 [0] if a < b goto _, [1] goto _
+        │ truelist=[0], falselist=[1]
+      └─ F (relop) → truelist=[0], falselist=[1]
+      │ 看到 '&&'
+      │ M → ε,  M.quad = 2  (L2)
+      │ T₁.truelist = [0]  →  回填到 M.quad = L2
+      backpatch([0], L2)  ← 指令 [0] 的目标填为 L2
+      ┌─ F → ! F
+        ┌─ F → ( B )
+          ┌─ B → T
+            ┌─ T → F
+              ┌─ F → id relop id  (c == d)
+      [2] emit: == c d  (目标待回填)
+      [3] emit: jump  (目标待回填)
+                │ 生成 [2] if c == d goto _, [3] goto _
+                │ truelist=[2], falselist=[3]
+              └─ F (relop) → truelist=[2], falselist=[3]
+            └─ T → truelist=[2], falselist=[3]
+          └─ B → truelist=[2], falselist=[3]
+        └─ F (paren) → truelist=[2], falselist=[3]
+        │ ! 取反: truelist ↔ falselist
+        │   原: truelist=[2], falselist=[3]
+        │   新: truelist=[3], falselist=[2]
+      └─ F (not) → truelist=[3], falselist=[2]
+      │ 合并: falselist = merge([1], [2]) = [1, 2]
+      │       truelist = [3]  (F₂ 的真出口)
+    └─ T → truelist=[3], falselist=[1, 2]
+    │ 看到 '||'
+    │ M → ε,  M.quad = 4  (L4)
+    │ B₁.falselist = [1, 2]  →  回填到 M.quad = L4
+      backpatch([1, 2], L4)  ← 指令 [1, 2] 的目标填为 L4
+    ┌─ T → F
+      ┌─ F → id relop id  (e > f)
+      [4] emit: > e f  (目标待回填)
+      [5] emit: jump  (目标待回填)
+        │ 生成 [4] if e > f goto _, [5] goto _
+        │ truelist=[4], falselist=[5]
+      └─ F (relop) → truelist=[4], falselist=[5]
+    └─ T → truelist=[4], falselist=[5]
+    │ 合并: truelist = merge([3], [4]) = [3, 4]
+    │       falselist = [5]  (B₂ 的假出口)
+  └─ B → truelist=[3, 4], falselist=[5]
+  
+  最终回填:
+      B.truelist  = [3, 4]  →  L6  (true 出口)
+      B.falselist = [5]  →  L7  (false 出口)
+      backpatch([3, 4], L6)  ← 指令 [3, 4] 的目标填为 L6
+      backpatch([5], L7)  ← 指令 [5] 的目标填为 L7
+
+  生成的三地址码:
+  ─────────────────────────────────────────────
+  if a < b goto L2
+  goto L4
+  L2: if c == d goto L4
+  goto L6
+  L4: if e > f goto L6
+  goto L7
+  L6: ...  // true  出口
+  L7: ...  // false 出口
+  ─────────────────────────────────────────────
+
