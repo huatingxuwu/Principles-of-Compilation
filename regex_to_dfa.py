@@ -91,6 +91,9 @@ class RegexParser:
                 raise ValueError("期待 ')'")
             self.consume()
             return node
+        elif ch == 'ε':
+            self.consume()
+            return EpsilonNode()
         elif ch in ('*', '|', ')'):
             raise ValueError(f"意外的运算符 '{ch}'")
         else:
@@ -106,6 +109,24 @@ class RegexNode:
 
     def describe(self) -> str:
         raise NotImplementedError
+
+
+@dataclass
+class EpsilonNode(RegexNode):
+    """空串 ε — 匹配空字符串。"""
+
+    def describe(self) -> str:
+        return 'ε'
+
+    def to_nfa(self, sc: 'StateCounter', trace: List[str]) -> 'NFA':
+        s = sc.fresh()
+        nfa = NFA()
+        nfa.start = s
+        nfa.accepts = {s}
+        trace.append(
+            f"  空串 ε: 新建状态 {s}, 起始=接受={{{s}}}（无迁移边）"
+        )
+        return nfa
 
 
 @dataclass
@@ -635,7 +656,9 @@ def regex_to_min_dfa(pattern: str, verbose: bool = True):
 
 def _describe_ast(node: RegexNode, depth: int) -> str:
     prefix = "  " * depth
-    if isinstance(node, CharNode):
+    if isinstance(node, EpsilonNode):
+        return "ε"
+    elif isinstance(node, CharNode):
         return f"字符 '{node.char}'"
     elif isinstance(node, ConcatNode):
         parts = [_describe_ast(c, depth + 1) for c in node.children]
@@ -657,15 +680,10 @@ def _describe_ast(node: RegexNode, depth: int) -> str:
 
 def run_all_tests():
     tests = [
-        #("a",           "单个字符"),
-        #("ab",          "连接 a·b"),
-        #("a|b",         "并 a|b"),
-        #("a*",          "Kleene 星 a*"),
-        #("a(b|c)*",     "复合表达式 a(b|c)*"),
-        #("(a|b)(a|b)*", "标识符 (a|b)(a|b)*"),
-        #("(ab)*",       "嵌套星 (ab)*"),
-        #("a|b|c",       "多分支并 a|b|c"),
-        ("(a|b)b*",       "嵌套星 (ab)*")
+        ("a",           "单个字符"),
+        ("a|ε",         "并 a|ε"),
+        ("aε",          "连接 a·ε"),
+        ("((ε|a)b*)*",       "嵌套星 (ab)*"),
     ]
     for pattern, desc in tests:
         print(f"\n{'='*60}")

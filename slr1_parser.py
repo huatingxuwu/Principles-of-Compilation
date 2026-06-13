@@ -91,43 +91,35 @@ def build_slr1_table(
 
 
 # ═══════════════════════════════════════════════════════════════
-# 2. SLR(1) 分析过程演示
+# 2. SLR(1) 分析过程
 # ═══════════════════════════════════════════════════════════════
 
-def slr1_parse_demo(
+def slr1_parse(
     grammar: Grammar,
-    states: List[FrozenSet[Item]],
-    gotos: Dict[Tuple[int, str], int],
-    FOLLOW: Dict[str, Set[str]],
+    table: Dict[Tuple[int, str], tuple],
+    aug: Grammar,
+    all_prods: List[Tuple[str, Tuple[str, ...]]],
     input_string: str,
-) -> bool:
-    """用 SLR(1) 分析表演示语法分析全过程。"""
-    aug = grammar.augmented()
+) -> Tuple[bool, List[str]]:
+    """用 SLR(1) 分析表做表驱动语法分析。返回 (success, trace_lines)。
+
+    与 lr0_automaton.lr0_parse_demo 结构相同，复用了 _print_parse_table。
+    区别仅在使用 SLR(1) 表（而非 LR(0) 表）。
+    """
+    trace: List[str] = []
     tokens = input_string.strip().split()
-    table = build_slr1_table(grammar, aug, states, gotos, FOLLOW)
 
-    all_prods = []
-    for lhs in aug.productions:
-        for rhs in aug.productions[lhs]:
-            all_prods.append((lhs, tuple(rhs)))
-
-    print(f"\n  输入串: {' '.join(tokens)}")
-    print(f"\n  SLR(1) 分析表 (ACTION / GOTO):")
-    print_table(table, grammar, len(states))
-
-    # 冲突检查
+    # 冲突预检
     conflicts = [(k, v) for k, v in table.items() if v[0] == 'conflict']
     if conflicts:
-        print(f"\n  ⚠ 仍有 {len(conflicts)} 个冲突（文法不是 SLR(1)）:")
+        trace.append(f"\n  ⚠ 仍有 {len(conflicts)} 个冲突（文法不是 SLR(1)）:")
         for (s, a), v in conflicts:
-            print(f"    状态 I{s}, 符号 '{a}': {_format_action(v[1])} vs {_format_action(v[2])}")
-        print(f"  → 需要 LR(1) 或 LALR(1)")
-        return False
-    else:
-        print(f"\n  ✓ SLR(1) 分析表无冲突！")
+            trace.append(f"    状态 I{s}, 符号 '{a}': {_format_action(v[1])} vs {_format_action(v[2])}")
+        trace.append(f"  → 需要 LR(1) 或 LALR(1)")
+        return False, trace
 
-    # 分析过程（表格格式）
-    print(f"\n  ── 分析过程 ──")
+    trace.append(f"  输入串: {' '.join(tokens)}")
+    trace.append("")
 
     rows: List[Tuple[str, str, str, str, str]] = []
     state_stack: List[int] = [0]
@@ -149,16 +141,17 @@ def slr1_parse_demo(
 
         if action_entry is None:
             rows.append((f"({step})", state_str, sym_str, remaining,
-                         f"✗ 错误: M[{s}, {a}] 为空"))
+                         f"✗ 错误: ACTION[{s}, {a}] 为空"))
             _print_parse_table(rows)
-            print(f"\n  ✗ 分析失败: ACTION[{s}, {a}] 为空")
-            return False
+            trace.append(f"\n  ✗ 分析失败: ACTION[{s}, {a}] 为空")
+            return False, trace
 
         action = action_entry[0]
 
         if action == 'shift':
             _, next_state = action_entry
-            rows.append((f"({step})", state_str, sym_str, remaining, f"移入{next_state}"))
+            rows.append((f"({step})", state_str, sym_str, remaining,
+                         f"移进 s{next_state}"))
             state_stack.append(next_state)
             sym_stack.append(a)
             pos += 1
@@ -169,7 +162,7 @@ def slr1_parse_demo(
             rhs_len = 0 if rhs == ('ε',) else len(rhs)
             rhs_str = ' '.join(rhs)
             rows.append((f"({step})", state_str, sym_str, remaining,
-                         f"按 {lhs} → {rhs_str} 归约"))
+                         f"按 {lhs} → {rhs_str} 归约 r{prod_idx}"))
 
             for _ in range(rhs_len):
                 state_stack.pop()
@@ -181,8 +174,8 @@ def slr1_parse_demo(
                 rows.append(("", "", "", "",
                              f"✗ GOTO[{new_s}, {lhs}] 不存在"))
                 _print_parse_table(rows)
-                print(f"\n  ✗ 分析失败: GOTO[{new_s}, {lhs}] 不存在")
-                return False
+                trace.append(f"\n  ✗ 分析失败: GOTO[{new_s}, {lhs}] 不存在")
+                return False, trace
 
             _, next_state = goto_entry
             state_stack.append(next_state)
@@ -191,10 +184,10 @@ def slr1_parse_demo(
         elif action == 'acc':
             rows.append((f"({step})", state_str, sym_str, remaining, "接受"))
             _print_parse_table(rows)
-            print(f"\n  ✓ SLR(1) 分析成功！输入串是文法的句子。")
-            return True
+            trace.append(f"\n  ✓ SLR(1) 分析成功！输入串是文法的句子。")
+            return True, trace
 
-    return True
+    return True, trace
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -202,7 +195,7 @@ def slr1_parse_demo(
 # ═══════════════════════════════════════════════════════════════
 
 def analyze_slr1(grammar_text: str, input_string: str = None):
-    """SLR(1) 完整流程: LR(0) 自动机 → FOLLOW → SLR(1) 分析。
+    """SLR(1) 完整流程: LR(0) 自动机 → FOLLOW → SLR(1) 表 → 分析过程。
 
     input_string 为 None 时只构造 SLR(1) 表并检查冲突。
     """
@@ -228,26 +221,43 @@ def analyze_slr1(grammar_text: str, input_string: str = None):
     for nt in sorted(grammar.non_terminals):
         print(f"    FOLLOW({nt}) = {{{fmt_set(FOLLOW[nt])}}}")
 
-    # Step 4: SLR(1) 分析表
+    # Step 4: SLR(1) 分析表（建表一次，复用）
     print_section_header("第四步: 构造 SLR(1) 分析表")
     print(f"  SLR(1) vs LR(0): 归约动作只在 FOLLOW(A) 中的符号上执行")
     print(f"  这消除了 LR(0) 的移进-归约冲突")
+    print()
 
-    if input_string:
-        # 带分析演示
-        success = slr1_parse_demo(grammar, states, gotos, FOLLOW, input_string)
+    aug = grammar.augmented()
+    table = build_slr1_table(grammar, aug, states, gotos, FOLLOW)
+
+    # 准备产生式编号列表（供分析阶段用）
+    all_prods = []
+    for lhs in aug.productions:
+        for rhs in aug.productions[lhs]:
+            all_prods.append((lhs, tuple(rhs)))
+
+    # 打印分析表
+    print(f"  SLR(1) 分析表 (ACTION / GOTO):")
+    print_table(table, grammar, len(states))
+
+    # 冲突检查
+    conflicts = [(k, v) for k, v in table.items() if v[0] == 'conflict']
+    if conflicts:
+        print(f"\n  ⚠ 有 {len(conflicts)} 个冲突（文法不是 SLR(1)）:")
+        for (s, a), v in conflicts:
+            print(f"    状态 I{s}, 符号 '{a}': {_format_action(v[1])} vs {_format_action(v[2])}")
     else:
-        # 只展示分析表
-        aug = grammar.augmented()
-        table = build_slr1_table(grammar, aug, states, gotos, FOLLOW)
-        print(f"\n  SLR(1) 分析表 (ACTION / GOTO):")
-        print_table(table, grammar, len(states))
-        conflicts = [(k, v) for k, v in table.items() if v[0] == 'conflict']
-        if conflicts:
-            print(f"\n  ⚠ 有 {len(conflicts)} 个冲突（文法不是 SLR(1)）")
-        else:
-            print(f"\n  ✓ SLR(1) 分析表无冲突")
-        success = len(conflicts) == 0
+        print(f"\n  ✓ SLR(1) 分析表无冲突！")
+
+    # Step 5: 分析过程（若有输入串）
+    if input_string:
+        print_section_header("第五步: SLR(1) 表驱动分析过程")
+        success, parse_trace = slr1_parse(grammar, table, aug, all_prods, input_string)
+        for line in parse_trace:
+            print(line)
+    else:
+        print_section_header("第五步: SLR(1) 语法分析")
+        print("  （未提供输入串，跳过分析。用法: python slr1_parser.py grammar.txt \"id * id\"）")
 
     return states, gotos
 
@@ -257,9 +267,7 @@ def analyze_slr1(grammar_text: str, input_string: str = None):
 # ═══════════════════════════════════════════════════════════════
 
 ARITHMETIC_GRAMMAR = """
-E → E + T | T
-T → T * F | F
-F → ( E ) | id
+S → S S + | S S * | a
 """
 
 SIMPLE_GRAMMAR = """
@@ -271,7 +279,7 @@ B → b | ε
 
 def run_builtin_tests():
     """运行内置测试。"""
-    # 测试 1: 算术表达式文法（该文法是 SLR(1)，无冲突）
+    # 测试 1: 只建表 + 检查冲突（无输入串）
     print("=" * 60)
     print("  测试 1: 算术表达式文法 — SLR(1) 表 (无冲突)")
     print("=" * 60)
@@ -279,11 +287,11 @@ def run_builtin_tests():
 
     print("\n\n")
 
-    # 测试 2: 带输入串的 SLR(1) 分析
+    # 测试 2: 含输入串的 SLR(1) 完整分析过程
     print("=" * 60)
-    print("  测试 2: SLR(1) 分析 'id * id'")
+    print("  测试 2: SLR(1) 分析过程 — 输入 'a a +'")
     print("=" * 60)
-    analyze_slr1(ARITHMETIC_GRAMMAR, "id * id")
+    analyze_slr1(ARITHMETIC_GRAMMAR, "a a * a +")
 
 
 # ═══════════════════════════════════════════════════════════════

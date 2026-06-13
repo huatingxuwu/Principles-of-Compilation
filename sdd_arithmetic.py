@@ -284,11 +284,7 @@ def translate_arithmetic(source: str):
 
 def run_builtin_tests():
     tests = [
-        "a + b",
-        "a + b * c",
-        "x * y + z / (a - b)",
-        "a * b + c * d - e / f",
-        "(x + y) * (a - b)",
+        "1 * 2 * 3 * (4 + 5)",
     ]
     for expr in tests:
         translate_arithmetic(expr)

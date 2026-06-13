@@ -462,20 +462,8 @@ def translate_boolean(source: str):
 
 def run_builtin_tests():
     tests = [
-        # 基础比较
-        "a < b",
-        # 简单逻辑
-        "a < b && c > d",
-        # 短路求值: ||
-        "x < 0 || x > 100",
-        # 复合表达式
-        "a && b || c && d",
-        # 带括号的复杂表达式
-        "(a < b || c > d) && e == f",
-        # ! 取反
-        "! (x < 0) && y > 0",
         # 混合 && || !
-        "a < b && ! (c == d) || e > f",
+        "x > 5 && x < 10 || x ==y",
     ]
     for expr in tests:
         translate_boolean(expr)

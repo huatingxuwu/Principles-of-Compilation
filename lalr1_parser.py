@@ -287,9 +287,7 @@ def analyze_lalr1(grammar_text: str, input_string: str = None):
 # ═══════════════════════════════════════════════════════════════
 
 ARITHMETIC_GRAMMAR = """
-E → E + T | T
-T → T * F | F
-F → ( E ) | id
+S → S S + | S S * | a
 """
 
 # 经典 LALR(1) vs SLR(1) vs LR(1) 对比文法
@@ -308,17 +306,17 @@ def run_builtin_tests():
 
     print("\n\n")
 
-    print("=" * 60)
-    print("  测试 2: LALR(1) 分析 'id * id + id'")
-    print("=" * 60)
-    analyze_lalr1(ARITHMETIC_GRAMMAR, "id * id + id")
+    # print("=" * 60)
+    # print("  测试 2: LALR(1) 分析 'id * id + id'")
+    # print("=" * 60)
+    # analyze_lalr1(ARITHMETIC_GRAMMAR, "id * id + id")
 
     print("\n\n")
 
-    print("=" * 60)
-    print("  测试 3: S→L=R|R, L→*R|id, R→L (经典对比文法)")
-    print("=" * 60)
-    analyze_lalr1(LR1_DEMO_GRAMMAR)
+    # print("=" * 60)
+    # print("  测试 3: S→L=R|R, L→*R|id, R→L (经典对比文法)")
+    # print("=" * 60)
+    # analyze_lalr1(LR1_DEMO_GRAMMAR)
 
 
 # ═══════════════════════════════════════════════════════════════

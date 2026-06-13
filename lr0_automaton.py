@@ -287,31 +287,21 @@ def build_lr0_table(
     return table
 
 
-def lr0_parse_demo(
+def lr0_parse(
     grammar: Grammar,
-    states: List[FrozenSet[Item]],
-    gotos: Dict[Tuple[int, str], int],
+    table: Dict[Tuple[int, str], tuple],
+    aug: Grammar,
+    all_prods: List[Tuple[str, Tuple[str, ...]]],
     input_string: str,
-):
-    """用 LR(0) 自动机进行语法分析，以表格形式展示每步操作。"""
-    aug = grammar.augmented()
+) -> Tuple[bool, List[str]]:
+    """用 LR(0) 分析表做表驱动语法分析。返回 (success, trace_lines)。"""
+    trace: List[str] = []
     tokens = input_string.strip().split()
-    table = build_lr0_table(grammar, aug, states, gotos)
 
-    all_prods = []
-    for lhs in aug.productions:
-        for rhs in aug.productions[lhs]:
-            all_prods.append((lhs, tuple(rhs)))
+    trace.append(f"  输入串: {' '.join(tokens)}")
+    trace.append("")
 
-    print(f"\n  输入串: {' '.join(tokens)}")
-    print(f"\n  LR(0) 分析表 (ACTION / GOTO):")
-    print_table(table, grammar, len(states))
-
-    print(f"\n  ── 分析过程 ──")
-
-    # 收集表格行
-    rows: List[Tuple[str, str, str, str, str]] = []  # (行号, 栈, 符号, 输入, 动作)
-
+    rows: List[Tuple[str, str, str, str, str]] = []
     state_stack: List[int] = [0]
     sym_stack: List[str] = ['$']
     input_tokens = tokens + ['$']
@@ -332,7 +322,7 @@ def lr0_parse_demo(
 
         if action_entry is None:
             rows.append((f"({step})", state_str, sym_str, remaining,
-                         f"✗ 错误: M[{s}, {a}] 为空"))
+                         f"✗ 错误: ACTION[{s}, {a}] 为空"))
             error_msg = f"ACTION[{s}, {a}] 为空，分析失败"
             break
 
@@ -340,7 +330,8 @@ def lr0_parse_demo(
 
         if action == 'shift':
             _, next_state = action_entry
-            rows.append((f"({step})", state_str, sym_str, remaining, f"移入{next_state}"))
+            rows.append((f"({step})", state_str, sym_str, remaining,
+                         f"移进 s{next_state}"))
             state_stack.append(next_state)
             sym_stack.append(a)
             pos += 1
@@ -351,7 +342,7 @@ def lr0_parse_demo(
             rhs_len = 0 if rhs == ('ε',) else len(rhs)
             rhs_str = ' '.join(rhs)
             rows.append((f"({step})", state_str, sym_str, remaining,
-                         f"按 {lhs} → {rhs_str} 归约"))
+                         f"按 {lhs} → {rhs_str} 归约 r{prod_idx}"))
 
             for _ in range(rhs_len):
                 state_stack.pop()
@@ -374,23 +365,22 @@ def lr0_parse_demo(
             break
 
         elif action == 'conflict':
-            existing = action_entry[1]  # pyright: ignore
-            new = action_entry[2]  # pyright: ignore
+            existing = action_entry[1]
+            new = action_entry[2]
             rows.append((f"({step})", state_str, sym_str, remaining,
                          f"⚠ 冲突: {_format_action(existing)} vs {_format_action(new)}"))
             error_msg = (f"LR(0) 冲突! 状态 I{s} 含移进-归约冲突，"
                          f"需要 SLR(1) 或 LR(1)")
             break
 
-    # 输出表格
     _print_parse_table(rows)
 
     if error_msg:
-        print(f"\n  ✗ {error_msg}")
-        return False
+        trace.append(f"\n  ✗ {error_msg}")
+        return False, trace
     else:
-        print(f"\n  ✓ 分析成功！输入串是文法的句子。")
-        return True
+        trace.append(f"\n  ✓ LR(0) 分析成功！输入串是文法的句子。")
+        return True, trace
 
 
 def _format_action(entry) -> str:
@@ -487,7 +477,7 @@ def _print_parse_table(rows: List[Tuple[str, str, str, str, str]]):
 # ═══════════════════════════════════════════════════════════════
 
 def analyze_lr0(grammar_text: str, input_string: Optional[str] = None):
-    """构造 LR(0) 自动机，可选演示 LR(0) 分析过程。
+    """构造 LR(0) 自动机 → 构造 LR(0) 分析表 → 可选分析过程。
 
     LR(0) 无前瞻，遇到冲突时会显示冲突原因。
     需要消除冲突请使用 slr1_parser.analyze_slr1()。
@@ -508,10 +498,38 @@ def analyze_lr0(grammar_text: str, input_string: Optional[str] = None):
     for line in trace:
         print(line)
 
-    # Step 3: 演示 LR(0) 分析过程（若提供输入串）
+    # Step 3: LR(0) 分析表（始终输出）
+    print_section_header("第三步: 构造 LR(0) 分析表")
+    aug = grammar.augmented()
+    table = build_lr0_table(grammar, aug, states, gotos)
+
+    all_prods = []
+    for lhs in aug.productions:
+        for rhs in aug.productions[lhs]:
+            all_prods.append((lhs, tuple(rhs)))
+
+    print(f"\n  LR(0) 分析表 (ACTION / GOTO):")
+    print_table(table, grammar, len(states))
+
+    # 冲突汇总
+    conflicts = [(k, v) for k, v in table.items() if v[0] == 'conflict']
+    if conflicts:
+        print(f"\n  ⚠ 有 {len(conflicts)} 个冲突（LR(0) 分析表非无冲突）:")
+        for (s, a), v in conflicts:
+            print(f"    状态 I{s}, 符号 '{a}': {_format_action(v[1])} vs {_format_action(v[2])}")
+        print(f"  → 需要 SLR(1) / LR(1) / LALR(1) 消除冲突")
+    else:
+        print(f"\n  ✓ LR(0) 分析表无冲突！")
+
+    # Step 4: 分析过程（若有输入串）
     if input_string:
-        print_section_header("第三步: LR(0) 分析表与分析过程")
-        lr0_parse_demo(grammar, states, gotos, input_string)
+        print_section_header("第四步: LR(0) 表驱动分析过程")
+        success, parse_trace = lr0_parse(grammar, table, aug, all_prods, input_string)
+        for line in parse_trace:
+            print(line)
+    else:
+        print_section_header("第四步: LR(0) 语法分析")
+        print("  （未提供输入串，跳过分析。用法: python lr0_automaton.py grammar.txt \"a a +\"）")
 
     return states, gotos
 
@@ -521,26 +539,14 @@ def analyze_lr0(grammar_text: str, input_string: Optional[str] = None):
 # ═══════════════════════════════════════════════════════════════
 
 ARITHMETIC_GRAMMAR = """
-E → E + T | T
-T → T * F | F
-F → ( E ) | id
+S → S S + | S S * | a
 """
 
-SIMPLE_GRAMMAR = """
-S → A B
-A → a | ε
-B → b | ε
-"""
-
-PAREN_GRAMMAR = """
-S → ( S ) S | ε
-"""
 
 
 def run_builtin_tests():
     tests = [
-        ("算术表达式文法 (经典 LR 示例)", ARITHMETIC_GRAMMAR),
-        ("含 ε 的简单文法", SIMPLE_GRAMMAR),
+        ("算术表达式文法 — LR(0) 表 (含冲突)", ARITHMETIC_GRAMMAR),
     ]
     for desc, grammar_text in tests:
         print("=" * 60)
@@ -548,6 +554,12 @@ def run_builtin_tests():
         print("=" * 60)
         analyze_lr0(grammar_text)
         print("\n\n")
+
+    # 额外: 带输入串的 LR(0) 完整分析过程
+    print("=" * 60)
+    print("  测试: LR(0) 分析过程 — 输入 'a a +'")
+    print("=" * 60)
+    analyze_lr0(ARITHMETIC_GRAMMAR, "a a a * +")
 
 
 # ═══════════════════════════════════════════════════════════════
