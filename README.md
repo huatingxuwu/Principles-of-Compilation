@@ -5,18 +5,25 @@
 ## Quick Start
 
 ```bash
-# 词法分析 — 正则 → NFA → DFA → 最小化 DFA
+# 词法分析 — 正则 → NFA（Thompson 构造法）
+python regex_to_nfa.py
+python regex_to_nfa.py "a(b|c)*"
+
+# 词法分析 — NFA → DFA → 最小化 DFA（子集构造 + Hopcroft）
 python regex_to_dfa.py
 python regex_to_dfa.py "a(b|c)*"
+
+# 直接从 NFA 图输入（跳过正则解析）
+python regex_to_dfa.py --nfa "0+a=1; 1+b=2"
 
 # LL(1) 语法分析 — FIRST/FOLLOW → 预测分析表 → 表驱动
 python ll1_parser.py
 python ll1_parser.py grammar.txt "id + id * id"
 
-# LR(0) 自动机构造 + 分析
+# LR(0) 自动机构造 + 分析过程表格
 python lr0_automaton.py
 
-# SLR(1) — FOLLOW 消冲突
+# SLR(1) — FOLLOW 消冲突 + 分析过程表格
 python slr1_parser.py
 python slr1_parser.py grammar.txt "id * id"
 
@@ -41,11 +48,12 @@ python sdd_arithmetic.py "x * y + z / (a - b)"
 
 ```
 .
-├── grammar_utils.py        # 公共模块: Grammar 解析, FIRST/FOLLOW 计算
-├── regex_to_dfa.py         # 词法分析: 正则→NFA→DFA→最小化 DFA
+├── grammar_utils.py        # 公共模块: Grammar 解析, FIRST/FOLLOW 计算 (支持 ε)
+├── regex_to_nfa.py         # 词法分析: 正则解析 + Thompson 构造 → ε-NFA
+├── regex_to_dfa.py         # 词法分析: NFA→DFA→最小化 DFA（支持 --nfa 直接输入 NFA 图）
 ├── ll1_parser.py           # LL(1): FIRST/FOLLOW → 预测分析表 → 表驱动
-├── lr0_automaton.py        # LR(0): 项集族, ACTION/GOTO 表
-├── slr1_parser.py          # SLR(1): FOLLOW 消冲突
+├── lr0_automaton.py        # LR(0): 项集族, ACTION/GOTO 表, 逐步分析过程
+├── slr1_parser.py          # SLR(1): FOLLOW 消冲突, 逐步分析过程表格
 ├── lr1_parser.py           # LR(1): 前瞻符精确传播
 ├── lalr1_parser.py         # LALR(1): 状态合并 (yacc/bison)
 ├── sdd_boolean.py          # 布尔表达式 SDD: 回填技术 + 三地址码
@@ -63,18 +71,30 @@ grammar_utils.py  ←── ll1_parser.py
     │        ↑                    ↑
     │        └── lr1_parser.py  ←── lalr1_parser.py
     │
-    └── regex_to_dfa.py (仅 print_section_header)
+    └── regex_to_nfa.py ←── regex_to_dfa.py (共用 NFA 数据结构)
 ```
 
 ## Features
 
-### Lexical Analysis (regex_to_dfa.py)
+### Lexical Analysis
+
+**regex_to_nfa.py** — 正则 → ε-NFA（Thompson 构造法）
 - Supports `*` (Kleene star), `|` (union), concatenation, `()` grouping
-- Thompson construction: Regex AST → ε-NFA
+- Regex parser → AST → Thompson construction → ε-NFA
+- ε-NFA data structure with auto-detection of start/accept states
+
+**regex_to_dfa.py** — NFA → DFA → 最小化 DFA
+- **输入 `--nfa`** 直接传入 NFA 图（格式: `状态+字符=状态`，用 `;` 或换行分隔）
+- **无参数** 运行内置正则测试用例
+- **传入正则** 则链式调用 regex_to_nfa 完成全流程
 - Subset construction: NFA → DFA
 - Hopcroft algorithm: DFA minimization
+- Output: transition tables, minimized state diagrams
 
 ### Syntax Analysis
+
+- Grammar supports **ε (epsilon)** for empty productions
+- LR(0) and SLR(1) output detailed **step-by-step analysis tables** (state stack, symbol stack, remaining input, action per step)
 
 | Parser | Lookahead | State Count | Conflict Resolution |
 |--------|-----------|-------------|---------------------|
