@@ -3,3 +3,17 @@ __pycache__/
 .env
 .venv/
 .codegraph/
+image.png
+regex_to_dfa.py
+test/lalr_variant_grammar.txt
+test/lalr_variant_lr0_output.txt
+test/lalr_variant_lr0_to_lalr_pass_output.txt
+test/lalr_variant_lr1_output.txt
+test/lalr_variant_lr1_to_lalr_output.txt
+test/lalr_variant_slr_output.txt
+test/problem3_grammar.txt
+test/problem3_output.txt
+test/problem4_grammar.txt
+test/problem4_lr0_output.txt
+test/problem4_slr1_output.txt
+test/test.md

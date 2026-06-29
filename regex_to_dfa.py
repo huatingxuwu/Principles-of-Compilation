@@ -397,10 +397,7 @@ def _describe_ast(node: RegexNode, depth: int) -> str:
 
 def run_all_tests():
     tests = [
-        ("a",           "单个字符"),
-        ("a|ε",         "并 a|ε"),
-        ("aε",          "连接 a·ε"),
-        ("((ε|a)b*)*",       "嵌套星 (ab)*"),
+        ("(a|ab)*ab",       "嵌套星 (ab)*"),
     ]
     for pattern, desc in tests:
         print(f"\n{'='*60}")
