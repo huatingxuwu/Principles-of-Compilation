@@ -1,0 +1,217 @@
+﻿
+────────────────────────────────────────────────────────────
+  Step 1. Grammar and FIRST sets
+────────────────────────────────────────────────────────────
+  Start symbol: S
+  Productions:
+    S -> L = R
+    S -> R
+    L -> R * R
+    L -> id
+    R -> id
+  FIRST:
+    FIRST(L) = {id}
+    FIRST(R) = {id}
+    FIRST(S) = {id}
+
+────────────────────────────────────────────────────────────
+  Step 2. LR(0) item sets
+────────────────────────────────────────────────────────────
+
+  I0
+    L -> . R * R
+    L -> . id
+    R -> . id
+    S -> . L = R
+    S -> . R
+    S' -> . S
+    transitions:
+      on 'L' -> I1
+      on 'R' -> I2
+      on 'S' -> I3
+      on 'id' -> I4
+
+  I1
+    S -> L . = R
+    transitions:
+      on '=' -> I5
+
+  I2
+    L -> R . * R
+    S -> R .
+    transitions:
+      on '*' -> I6
+
+  I3
+    S' -> S .
+
+  I4
+    L -> id .
+    R -> id .
+
+  I5
+    R -> . id
+    S -> L = . R
+    transitions:
+      on 'R' -> I7
+      on 'id' -> I8
+
+  I6
+    L -> R * . R
+    R -> . id
+    transitions:
+      on 'R' -> I9
+      on 'id' -> I8
+
+  I7
+    S -> L = R .
+
+  I8
+    R -> id .
+
+  I9
+    L -> R * R .
+
+────────────────────────────────────────────────────────────
+  Step 3. Kernel items
+────────────────────────────────────────────────────────────
+  Kernel items that receive propagated lookaheads:
+    start  I0: S' -> . S
+    kernel I1: S -> L . = R
+    kernel I2: L -> R . * R
+    kernel I2: S -> R .
+    kernel I3: S' -> S .
+    kernel I4: L -> id .
+    kernel I4: R -> id .
+    kernel I5: S -> L = . R
+    kernel I6: L -> R * . R
+    kernel I7: S -> L = R .
+    kernel I8: R -> id .
+    kernel I9: L -> R * R .
+
+────────────────────────────────────────────────────────────
+  Step 4. INIT lookaheads
+────────────────────────────────────────────────────────────
+  I0: S' -> . S gets INIT {$}
+      from augmented start item: $
+  I2: L -> R . * R gets INIT {=}
+      generated from I0: S' -> . S while taking GOTO on 'R': =
+  I4: L -> id . gets INIT {=}
+      generated from I0: S' -> . S while taking GOTO on 'id': =
+  I4: R -> id . gets INIT {*}
+      generated from I0: S' -> . S while taking GOTO on 'id': *
+
+────────────────────────────────────────────────────────────
+  Step 5. Propagation graph
+────────────────────────────────────────────────────────────
+  FROM I0: S' -> . S
+       TO I1: S -> L . = R
+       TO I2: S -> R .
+       TO I3: S' -> S .
+       TO I4: R -> id .
+  FROM I1: S -> L . = R
+       TO I5: S -> L = . R
+  FROM I2: L -> R . * R
+       TO I6: L -> R * . R
+  FROM I5: S -> L = . R
+       TO I7: S -> L = R .
+       TO I8: R -> id .
+  FROM I6: L -> R * . R
+       TO I8: R -> id .
+       TO I9: L -> R * R .
+
+────────────────────────────────────────────────────────────
+  Step 6. PASS rounds
+────────────────────────────────────────────────────────────
+  PASS 1
+    I1: S -> L . = R adds {$}
+    I2: S -> R . adds {$}
+    I3: S' -> S . adds {$}
+    I4: R -> id . adds {$}
+    I6: L -> R * . R adds {=}
+  PASS 2
+    I5: S -> L = . R adds {$}
+    I8: R -> id . adds {=}
+    I9: L -> R * R . adds {=}
+  PASS 3
+    I7: S -> L = R . adds {$}
+    I8: R -> id . adds {$}
+
+────────────────────────────────────────────────────────────
+  Step 7. Lookahead table
+────────────────────────────────────────────────────────────
+  State | Item         | INIT | PASS 1 | PASS 2 | PASS 3 | FINAL
+  ------+--------------+------+--------+--------+--------+------
+  I0    | S' -> . S    | $    | $      | $      | $      | $    
+  I1    | S -> L . = R | -    | $      | $      | $      | $    
+  I2    | L -> R . * R | =    | =      | =      | =      | =    
+  I2    | S -> R .     | -    | $      | $      | $      | $    
+  I3    | S' -> S .    | -    | $      | $      | $      | $    
+  I4    | L -> id .    | =    | =      | =      | =      | =    
+  I4    | R -> id .    | *    | $, *   | $, *   | $, *   | $, * 
+  I5    | S -> L = . R | -    | -      | $      | $      | $    
+  I6    | L -> R * . R | -    | =      | =      | =      | =    
+  I7    | S -> L = R . | -    | -      | -      | $      | $    
+  I8    | R -> id .    | -    | -      | =      | $, =   | $, = 
+  I9    | L -> R * R . | -    | -      | =      | =      | =    
+
+────────────────────────────────────────────────────────────
+  Step 8. Final LALR(1) item sets
+────────────────────────────────────────────────────────────
+
+  I0
+    L -> . R * R, {=}
+    L -> . id, {=}
+    R -> . id, {$, *}
+    S -> . L = R, {$}
+    S -> . R, {$}
+    S' -> . S, {$}
+
+  I1
+    S -> L . = R, {$}
+
+  I2
+    L -> R . * R, {=}
+    S -> R ., {$}
+
+  I3
+    S' -> S ., {$}
+
+  I4
+    L -> id ., {=}
+    R -> id ., {$, *}
+
+  I5
+    R -> . id, {$}
+    S -> L = . R, {$}
+
+  I6
+    L -> R * . R, {=}
+    R -> . id, {=}
+
+  I7
+    S -> L = R ., {$}
+
+  I8
+    R -> id ., {$, =}
+
+  I9
+    L -> R * R ., {=}
+
+────────────────────────────────────────────────────────────
+  Step 9. LALR(1) parsing table
+────────────────────────────────────────────────────────────
+    状态 |    $     |    *     |    =     |    id    ||   L    |   R    |   S   
+    --------------------------------------------------------------------------
+    I0    |          |          |          | 移进 s4    || | 1      | 2      | 3     
+    I1    |          |          | 移进 s5    |          || |        |        |       
+    I2    | 归约 r2    | 移进 s6    |          |          || |        |        |       
+    I3    | acc      |          |          |          || |        |        |       
+    I4    | 归约 r5    | 归约 r5    | 归约 r4    |          || |        |        |       
+    I5    |          |          |          | 移进 s8    || |        | 7      |       
+    I6    |          |          |          | 移进 s8    || |        | 9      |       
+    I7    | 归约 r1    |          |          |          || |        |        |       
+    I8    | 归约 r5    |          | 归约 r5    |          || |        |        |       
+    I9    |          |          | 归约 r3    |          || |        |        |       
+
+  No LALR(1) conflicts.
